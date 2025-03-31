@@ -205,7 +205,7 @@ function clearTransactionLogs() {
 
 const screen = blessed.screen({
   smartCSR: true,
-  title: "NT Exhaust",
+  title: "LocalSec",
   fullUnicode: true,
   mouse: true
 });

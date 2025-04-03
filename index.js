@@ -263,7 +263,7 @@ async function swapAuto(walletIndex, direction, amountIn) {
     } else if (direction === "ethToBtc") {
       params = { tokenIn: ETH_ADDRESS, tokenOut: BTC_ADDRESS, fee: 3000, recipient: wallet.address, deadline, amountIn, amountOutMinimum: 0, sqrtPriceLimitX96: 0n };
     } else {
-      throw new Error("Hướng hoán đổi không xác định");
+      throw new Error(`Hướng hoán đổi không xác định: ${direction}`);
     }
     const gasPriceToUse = selectedGasPrice || (await provider.getFeeData()).gasPrice;
     const tx = await swapContract.exactInputSingle(params, {
@@ -292,27 +292,34 @@ async function autoSwapAllPairs(totalSwaps) {
       { from: "ETH", to: "BTC", tokenIn: ETH_ADDRESS, tokenOut: BTC_ADDRESS, abi: ETH_ABI },
     ];
 
-    for (let i = 1; i <= totalSwaps; i++) {
+    let walletCounter = 0; // Biến đếm để luân phiên ví
+
+    for (let i = 0; i < totalSwaps; i++) {
       if (!transactionRunning) return;
-      const walletIndex = (i - 1) % wallets.length;
 
       for (const pair of pairs) {
-        const amount = pair.from === "USDT" ? ethers.parseUnits("1", 18) : ethers.parseUnits("0.001", 18); // 1 USDT khi từ USDT, 0.001 cho các trường hợp khác
+        const walletIndex = walletCounter % wallets.length; // Luân phiên ví cho mỗi cặp
+        addLog(`0G: Chuẩn bị hoán đổi với ví ${walletIndex + 1}`, "system");
+
+        const amount = pair.from === "USDT" ? ethers.parseUnits("1", 18) : ethers.parseUnits("0.001", 18);
         const tokenContract = new ethers.Contract(pair.tokenIn, pair.abi, provider);
         const currentBalance = await tokenContract.balanceOf(wallets[walletIndex].address);
 
         if (currentBalance < amount) {
-          addLog(`0G: Ví ${walletIndex + 1} số dư ${pair.from} không đủ`, "error");
+          addLog(`0G: Ví ${walletIndex + 1} số dư ${pair.from} không đủ (${ethers.formatUnits(currentBalance, 18)} < ${ethers.formatUnits(amount, 18)})`, "error");
         } else {
+          const direction = `${pair.from.toLowerCase()}To${pair.to.toLowerCase()}`; // Chuẩn hóa direction
           await addTransactionToQueue(async () => {
             await approveToken(walletIndex, pair.tokenIn, pair.abi, amount);
-            await swapAuto(walletIndex, `${pair.from.toLowerCase()}To${pair.to.toLowerCase()}`, amount);
+            await swapAuto(walletIndex, direction, amount);
             await updateWalletData();
           }, `Ví ${walletIndex + 1}: ${pair.from} ➯ ${pair.to}, ${pair.from === "USDT" ? "1" : "0.001"} ${pair.from}`);
         }
 
+        walletCounter++; // Tăng biến đếm để chuyển sang ví tiếp theo
+
         if (!transactionRunning) return;
-        const delaySeconds = Math.floor(Math.random() * (15 - 3 + 1)) + 3; // Giảm thời gian chờ từ 3 đến 15 giây
+        const delaySeconds = Math.floor(Math.random() * (15 - 3 + 1)) + 3;
         addLog(`0G: Đợi ${delaySeconds} giây trước khi hoán đổi cặp tiếp theo...`, "0g");
         await interruptibleDelay(delaySeconds * 1000);
       }

@@ -207,25 +207,9 @@ async function updateWalletData() {
     let content = "┌── Thông Tin Ví\n";
     for (let i = 0; i < wallets.length; i++) {
       const wallet = wallets[i];
-      const balanceNative = await provider.getBalance(wallet.address);
-      const saldoAOGI = parseFloat(ethers.formatEther(balanceNative)).toFixed(4);
-      const usdtContract = new ethers.Contract(USDT_ADDRESS, USDT_ABI, provider);
-      const balanceUSDT = await usdtContract.balanceOf(wallet.address);
-      const saldoUSDT = parseFloat(ethers.formatEther(balanceUSDT)).toFixed(4);
-      const ethContract = new ethers.Contract(ETH_ADDRESS, ETH_ABI, provider);
-      const balanceETH = await ethContract.balanceOf(wallet.address);
-      const saldoETH = parseFloat(ethers.formatEther(balanceETH)).toFixed(4);
-      const btcContract = new ethers.Contract(BTC_ADDRESS, BTC_ABI, provider);
-      const balanceBTC = await btcContract.balanceOf(wallet.address);
-      const saldoBTC = parseFloat(ethers.formatUnits(balanceBTC, 18)).toFixed(4);
-
       content += 
 `│   ├── Ví ${i + 1}
 │   │   ├── Địa Chỉ : ${wallet.address.slice(0, 10)}..${wallet.address.slice(-3)}
-│   │   ├── AOGI    : {bright-green-fg}${saldoAOGI}{/bright-green-fg}
-│   │   ├── ETH     : {bright-green-fg}${saldoETH}{/bright-green-fg}
-│   │   ├── USDT    : {bright-green-fg}${saldoUSDT}{/bright-green-fg}
-│   │   └── BTC     : {bright-green-fg}${saldoBTC}{/bright-green-fg}
 `;
     }
     content += `└── Mạng       : {bright-cyan-fg}${NETWORK_NAME}{/bright-cyan-fg}`;
@@ -328,7 +312,7 @@ async function autoSwapAllPairs(totalSwaps) {
         }
 
         if (!transactionRunning) return;
-        const delaySeconds = Math.floor(Math.random() * (60 - 30 + 1)) + 30;
+        const delaySeconds = Math.floor(Math.random() * (15 - 3 + 1)) + 3; // Giảm thời gian chờ từ 3 đến 15 giây
         addLog(`0G: Đợi ${delaySeconds} giây trước khi hoán đổi cặp tiếp theo...`, "0g");
         await interruptibleDelay(delaySeconds * 1000);
       }

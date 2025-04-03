@@ -3,6 +3,7 @@ import blessed from "blessed";
 import figlet from "figlet";
 import { ethers } from "ethers";
 
+// Cấu hình biến môi trường
 const RPC_URL = process.env.RPC_URL || "https://your-default-rpc-url";
 const PRIVATE_KEYS_RAW = process.env.PRIVATE_KEYS || "";
 if (!PRIVATE_KEYS_RAW) {
@@ -11,19 +12,17 @@ if (!PRIVATE_KEYS_RAW) {
 }
 const PRIVATE_KEYS = PRIVATE_KEYS_RAW.split(",").map(key => {
   key = key.trim();
-  // Nếu key không có 0x và dài 64 ký tự hex, thêm 0x
   if (!key.startsWith("0x") && key.match(/^[0-9a-fA-F]{64}$/)) {
     return "0x" + key;
   }
-  // Nếu đã có 0x, giữ nguyên
   return key;
 }).filter(key => key);
 
-const ROUTER_ADDRESS = process.env.ROUTER_ADDRESS;
-const USDT_ADDRESS = process.env.USDT_ADDRESS;
-const ETH_ADDRESS = process.env.ETH_ADDRESS;
-const BTC_ADDRESS = process.env.BTC_ADDRESS;
-const AOGI_ADDRESS = process.env.AOGI_ADDRESS;
+const ROUTER_ADDRESS = process.env.ROUTER_ADDRESS || "0xYourRouterAddress";
+const USDT_ADDRESS = process.env.USDT_ADDRESS || "0xYourUSDTAddress";
+const ETH_ADDRESS = process.env.ETH_ADDRESS || "0xYourETHAddress";
+const BTC_ADDRESS = process.env.BTC_ADDRESS || "0xYourBTCAddress";
+const AOGI_ADDRESS = process.env.AOGI_ADDRESS || "0xYourAOGIAddress";
 const NETWORK_NAME = process.env.NETWORK_NAME || "Unknown Network";
 const APPROVAL_GAS_LIMIT = 100000;
 const SWAP_GAS_LIMIT = 150000;
@@ -31,14 +30,14 @@ const ESTIMATED_GAS_USAGE = 150000;
 
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 
+// Khởi tạo wallets
 console.log("Raw PRIVATE_KEYS từ .env:", PRIVATE_KEYS_RAW);
 console.log("PRIVATE_KEYS sau khi xử lý:", PRIVATE_KEYS);
 
 const wallets = PRIVATE_KEYS.map((key, index) => {
   try {
-    // Kiểm tra định dạng: phải là 0x + 64 ký tự hex sau khi xử lý
     if (!key.match(/^0x[0-9a-fA-F]{64}$/)) {
-      throw new Error(`Private key ${index + 1} không đúng định dạng (64 ký tự hex)`);
+      throw new Error(`Private key ${index + 1} không đúng định dạng (64 ký tự hex với 0x)`);
     }
     const wallet = new ethers.Wallet(key, provider);
     console.log(`Ví ${index + 1} được tạo: ${wallet.address}`);
@@ -49,11 +48,41 @@ const wallets = PRIVATE_KEYS.map((key, index) => {
   }
 });
 
-// ABI definitions (giữ nguyên)
-const CONTRACT_ABI = [/* ... */];
-const USDT_ABI = [/* ... */];
-const ETH_ABI = [/* ... */];
-const BTC_ABI = [/* ... */];
+// ABI definitions
+const CONTRACT_ABI = [
+  {
+    inputs: [
+      {
+        components: [
+          { internalType: "address", name: "tokenIn", type: "address" },
+          { internalType: "address", name: "tokenOut", type: "address" },
+          { internalType: "uint24", name: "fee", type: "uint24" },
+          { internalType: "address", name: "recipient", type: "address" },
+          { internalType: "uint256", name: "deadline", type: "uint256" },
+          { internalType: "uint256", name: "amountIn", type: "uint256" },
+          { internalType: "uint256", name: "amountOutMinimum", type: "uint256" },
+          { internalType: "uint160", name: "sqrtPriceLimitX96", type: "uint160" },
+        ],
+        internalType: "struct ISwapRouter.ExactInputSingleParams",
+        name: "params",
+        type: "tuple",
+      },
+    ],
+    name: "exactInputSingle",
+    outputs: [{ internalType: "uint256", name: "amountOut", type: "uint256" }],
+    stateMutability: "payable",
+    type: "function",
+  },
+];
+
+const USDT_ABI = [
+  { constant: false, inputs: [{ name: "_spender", type: "address" }, { name: "_value", type: "uint256" }], name: "approve", outputs: [{ name: "", type: "bool" }], stateMutability: "nonpayable", type: "function" },
+  { constant: true, inputs: [{ name: "_owner", type: "address" }], name: "balanceOf", outputs: [{ name: "balance", type: "uint256" }], stateMutability: "view", type: "function" },
+  { constant: true, inputs: [{ name: "_owner", type: "address" }, { name: "_spender", type: "address" }], name: "allowance", outputs: [{ name: "remaining", type: "uint256" }], stateMutability: "view", type: "function" }
+];
+
+const ETH_ABI = USDT_ABI;
+const BTC_ABI = USDT_ABI;
 
 let transactionRunning = false;
 let chosenSwap = null;
@@ -62,6 +91,22 @@ let transactionQueueList = [];
 let transactionIdCounter = 0;
 let nextNonces = wallets.map(() => null);
 let selectedGasPrice = null;
+
+// Khai báo UI elements ở phạm vi toàn cục
+const screen = blessed.screen({ smartCSR: true, title: "LocalSec", fullUnicode: true, mouse: true });
+const headerBox = blessed.box({ top: 0, left: "center", width: "100%", tags: true, style: { fg: "white" } });
+const descriptionBox = blessed.box({ left: "center", width: "100%", content: "{center}{bold}{bright-yellow-fg}« ✮ 0̲̅G̲̅ L̲̅A̲̅B̲̅S̲̅ TỰ ĐỘNG HOÁN ĐỔI ✮ »{/bright-yellow-fg}{/bold}{/center}", tags: true });
+const logsBox = blessed.box({ label: " Nhật Ký Giao Dịch ", border: { type: "line" }, top: 0, left: 0, width: "60%", height: 10, scrollable: true, alwaysScroll: true, mouse: true, keys: true, tags: true, scrollbar: { ch: " ", style: { bg: "blue" } }, style: { border: { fg: "red" }, fg: "bright-cyan" } });
+const walletBox = blessed.box({ label: " Thông Tin Ví ", border: { type: "line" }, tags: true, style: { border: { fg: "magenta" }, fg: "white" }, content: "Đang lấy dữ liệu ví..." });
+const gasPriceBox = blessed.box({ label: " Thông Tin Giá Gas ", tags: true, border: { type: "line" }, style: { border: { fg: "blue" }, fg: "white" }, content: "Đang tải giá gas..." });
+const mainMenu = blessed.list({ label: " Menu ", left: "60%", keys: true, mouse: true, border: { type: "line" }, style: { fg: "white", border: { fg: "yellow" }, selected: { bg: "green", fg: "black" } }, items: [] });
+const autoSwapSubMenu = blessed.list({ label: " Menu Hoán Đổi Tự Động ", left: "60%", keys: true, mouse: true, border: { type: "line" }, style: { selected: { bg: "blue", fg: "white" }, border: { fg: "yellow" }, fg: "white" }, items: [] });
+const queueMenu = blessed.box({ label: " Hàng Đợi Giao Dịch ", top: "10%", left: "center", width: "80%", height: "80%", border: { type: "line" }, style: { border: { fg: "blue" } }, scrollable: true, keys: true, mouse: true, alwaysScroll: true, tags: true });
+const exitButton = blessed.button({ content: " Thoát ", bottom: 0, left: "center", shrink: true, padding: { left: 1, right: 1 }, border: { type: "line" }, style: { fg: "white", bg: "red", border: { fg: "white" }, hover: { bg: "blue" } }, mouse: true, keys: true });
+const promptBox = blessed.prompt({ parent: screen, border: "line", height: "20%", width: "50%", top: "center", left: "center", label: "{bright-blue-fg}Số Lượng Hoán Đổi{/bright-blue-fg}", tags: true, keys: true, mouse: true, style: { fg: "bright-white", border: { fg: "red" } } });
+
+let transactionLogs = [];
+let renderTimeout;
 
 function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function shortHash(hash) { return `${hash.substring(0, 6)}...${hash.substring(hash.length - 4)}`; }
@@ -75,8 +120,6 @@ async function interruptibleDelay(totalMs) {
   }
 }
 
-let transactionLogs = [];
-let renderTimeout;
 function safeRender() {
   if (renderTimeout) clearTimeout(renderTimeout);
   renderTimeout = setTimeout(() => { screen.render(); }, 50);
@@ -103,8 +146,63 @@ function clearTransactionLogs() {
   addLog("Nhật ký giao dịch đã được xóa.", "system");
 }
 
-const screen = blessed.screen({ smartCSR: true, title: "LocalSec", fullUnicode: true, mouse: true });
-// ... UI setup giữ nguyên
+figlet.text("LocalSec", { font: "Speed" }, (err, data) => {
+  headerBox.setContent(err ? "{center}{bold}LocalSec{/bold}{/center}" : `{center}{bold}{green-fg}${data}{/green-fg}{/bold}{/center}`);
+  screen.render();
+});
+
+async function updateGasPriceBox() {
+  try {
+    const feeData = await provider.getFeeData();
+    const gasPriceBN = feeData.gasPrice;
+    const gasNormal = gasPriceBN;
+    const gasRendah = gasPriceBN * 80n / 100n;
+    const gasFeeX2 = gasPriceBN * 2n;
+    const feeNormal = gasNormal * BigInt(ESTIMATED_GAS_USAGE);
+    const feeRendah = gasRendah * BigInt(ESTIMATED_GAS_USAGE);
+    const feeX2 = gasFeeX2 * BigInt(ESTIMATED_GAS_USAGE);
+    const gasNormalStr = parseFloat(ethers.formatUnits(gasNormal, "gwei")).toFixed(3);
+    const gasRendahStr = parseFloat(ethers.formatUnits(gasRendah, "gwei")).toFixed(3);
+    const gasX2Str = parseFloat(ethers.formatUnits(gasFeeX2, "gwei")).toFixed(3);
+    const feeNormalStr = parseFloat(ethers.formatEther(feeNormal)).toFixed(5);
+    const feeRendahStr = parseFloat(ethers.formatEther(feeRendah)).toFixed(5);
+    const feeX2Str = parseFloat(ethers.formatEther(feeX2)).toFixed(5);
+    const content =
+      ` Gas Bình Thường : {bright-green-fg}${gasNormalStr}{/bright-green-fg} Gwei      {bright-yellow-fg} ➥ {/bright-yellow-fg}     Phí Dự Kiến : {bright-red-fg}${feeNormalStr}{/bright-red-fg} AOGI\n` +
+      ` Gas Thấp       : {bright-green-fg}${gasRendahStr}{/bright-green-fg} Gwei      {bright-yellow-fg} ➥ {/bright-yellow-fg}     Phí Dự Kiến : {bright-red-fg}${feeRendahStr}{/bright-red-fg} AOGI\n` +
+      ` Gas Phí x2     : {bright-green-fg}${gasX2Str}{/bright-green-fg} Gwei     {bright-yellow-fg} ➥ {/bright-yellow-fg}     Phí Dự Kiến : {bright-red-fg}${feeX2Str}{/bright-red-fg} AOGI`;
+    gasPriceBox.setContent(content);
+    screen.render();
+  } catch (error) {
+    addLog("Không thể cập nhật giá gas: " + error.message, "error");
+  }
+}
+setInterval(updateGasPriceBox, 10000);
+updateGasPriceBox();
+
+function updateMainMenuItems() {
+  const baseItems = ["Hoán Đổi 0g", "Hàng Đợi Giao Dịch", "Xóa Nhật Ký Giao Dịch", "Làm Mới", "Thoát"];
+  if (transactionRunning) baseItems.splice(1, 0, "Dừng Tất Cả Giao Dịch");
+  mainMenu.setItems(baseItems);
+  screen.render();
+}
+
+function update0gSwapSubMenuItems() {
+  const items = ["Tự Động Hoán Đổi USDT & ETH", "Tự Động Hoán Đổi USDT & BTC", "Tự Động Hoán Đổi BTC & ETH", "Xóa Nhật Ký Giao Dịch", "Quay Lại Menu Chính", "Thoát"];
+  if (transactionRunning) items.unshift("Dừng Giao Dịch");
+  autoSwapSubMenu.setItems(items);
+  screen.render();
+}
+
+autoSwapSubMenu.hide();
+queueMenu.hide();
+exitButton.on("press", () => {
+  queueMenu.hide();
+  mainMenu.show();
+  mainMenu.focus();
+  screen.render();
+});
+queueMenu.append(exitButton);
 
 async function updateWalletData() {
   try {
@@ -141,7 +239,7 @@ async function updateWalletData() {
   }
 }
 
-async function approveToken(walletIndex, tokenAddress, tokenAbi, amount, decimals) {
+async function approveToken(walletIndex, tokenAddress, tokenAbi, amount) {
   const wallet = wallets[walletIndex];
   try {
     const tokenContract = new ethers.Contract(tokenAddress, tokenAbi, wallet);
@@ -182,6 +280,8 @@ async function swapAuto(walletIndex, direction, amountIn) {
       params = { tokenIn: BTC_ADDRESS, tokenOut: ETH_ADDRESS, fee: 3000, recipient: wallet.address, deadline, amountIn, amountOutMinimum: 0, sqrtPriceLimitX96: 0n };
     } else if (direction === "ethToBtc") {
       params = { tokenIn: ETH_ADDRESS, tokenOut: BTC_ADDRESS, fee: 3000, recipient: wallet.address, deadline, amountIn, amountOutMinimum: 0, sqrtPriceLimitX96: 0n };
+    } else {
+      throw new Error("Hướng hoán đổi không xác định");
     }
     const gasPriceToUse = selectedGasPrice || (await provider.getFeeData()).gasPrice;
     const tx = await swapContract.exactInputSingle(params, {
@@ -213,7 +313,7 @@ async function autoSwapUsdtEth(totalSwaps) {
           addLog(`0G: Ví ${walletIndex + 1} số dư USDT không đủ`, "error");
         } else {
           await addTransactionToQueue(async () => {
-            await approveToken(walletIndex, USDT_ADDRESS, USDT_ABI, usdtAmount, 18);
+            await approveToken(walletIndex, USDT_ADDRESS, USDT_ABI, usdtAmount);
             await swapAuto(walletIndex, "usdtToEth", usdtAmount);
             await updateWalletData();
           }, `Ví ${walletIndex + 1}: USDT ➯ ETH, ${randomUsdt} USDT`);
@@ -227,7 +327,7 @@ async function autoSwapUsdtEth(totalSwaps) {
           addLog(`0G: Ví ${walletIndex + 1} số dư ETH không đủ`, "error");
         } else {
           await addTransactionToQueue(async () => {
-            await approveToken(walletIndex, ETH_ADDRESS, ETH_ABI, ethAmount, 18);
+            await approveToken(walletIndex, ETH_ADDRESS, ETH_ABI, ethAmount);
             await swapAuto(walletIndex, "ethToUsdt", ethAmount);
             await updateWalletData();
           }, `Ví ${walletIndex + 1}: ETH ➯ USDT, ${randomEth} ETH`);
@@ -261,7 +361,7 @@ async function autoSwapUsdtBtc(totalSwaps) {
           addLog(`0G: Ví ${walletIndex + 1} số dư USDT không đủ`, "error");
         } else {
           await addTransactionToQueue(async () => {
-            await approveToken(walletIndex, USDT_ADDRESS, USDT_ABI, usdtAmount, 18);
+            await approveToken(walletIndex, USDT_ADDRESS, USDT_ABI, usdtAmount);
             await swapAuto(walletIndex, "usdtToBtc", usdtAmount);
             await updateWalletData();
           }, `Ví ${walletIndex + 1}: USDT ➯ BTC, ${randomUsdt} USDT`);
@@ -275,7 +375,7 @@ async function autoSwapUsdtBtc(totalSwaps) {
           addLog(`0G: Ví ${walletIndex + 1} số dư BTC không đủ`, "error");
         } else {
           await addTransactionToQueue(async () => {
-            await approveToken(walletIndex, BTC_ADDRESS, BTC_ABI, btcAmount, 18);
+            await approveToken(walletIndex, BTC_ADDRESS, BTC_ABI, btcAmount);
             await swapAuto(walletIndex, "btcToUsdt", btcAmount);
             await updateWalletData();
           }, `Ví ${walletIndex + 1}: BTC ➯ USDT, ${randomBtc} BTC`);
@@ -309,7 +409,7 @@ async function autoSwapBtcEth(totalSwaps) {
           addLog(`0G: Ví ${walletIndex + 1} số dư BTC không đủ`, "error");
         } else {
           await addTransactionToQueue(async () => {
-            await approveToken(walletIndex, BTC_ADDRESS, BTC_ABI, btcAmount, 18);
+            await approveToken(walletIndex, BTC_ADDRESS, BTC_ABI, btcAmount);
             await swapAuto(walletIndex, "btcToEth", btcAmount);
             await updateWalletData();
           }, `Ví ${walletIndex + 1}: BTC ➯ ETH, ${randomBtc} BTC`);
@@ -323,7 +423,7 @@ async function autoSwapBtcEth(totalSwaps) {
           addLog(`0G: Ví ${walletIndex + 1} số dư ETH không đủ`, "error");
         } else {
           await addTransactionToQueue(async () => {
-            await approveToken(walletIndex, ETH_ADDRESS, ETH_ABI, ethAmount, 18);
+            await approveToken(walletIndex, ETH_ADDRESS, ETH_ABI, ethAmount);
             await swapAuto(walletIndex, "ethToBtc", ethAmount);
             await updateWalletData();
           }, `Ví ${walletIndex + 1}: ETH ➯ BTC, ${randomEth} ETH`);
@@ -363,7 +463,123 @@ function addTransactionToQueue(transactionFunction, description = "Giao Dịch")
   return transactionQueue;
 }
 
-// ... Các hàm UI khác giữ nguyên (updateQueueDisplay, stopTransaction, v.v.)
+function updateTransactionStatus(id, status) {
+  transactionQueueList.forEach(tx => { if (tx.id === id) tx.status = status; });
+  updateQueueDisplay();
+}
+
+function removeTransactionFromQueue(id) {
+  transactionQueueList = transactionQueueList.filter(tx => tx.id !== id);
+  updateQueueDisplay();
+}
+
+function getTransactionQueueContent() {
+  return transactionQueueList.length === 0 ? "Không có giao dịch nào trong hàng đợi." : transactionQueueList.map(tx => `ID: ${tx.id} | ${tx.description} | ${tx.status} | ${tx.timestamp}`).join("\n");
+}
+
+function updateQueueDisplay() {
+  if (queueMenu.visible) {
+    queueMenu.setContent(getTransactionQueueContent());
+    screen.render();
+  }
+}
+
+function showTransactionQueueMenu() {
+  queueMenu.setContent(getTransactionQueueContent());
+  queueMenu.show();
+  queueMenu.focus();
+  screen.render();
+  queueMenu.key(["escape", "q", "C-c"], () => {
+    queueMenu.hide();
+    mainMenu.show();
+    mainMenu.focus();
+    screen.render();
+  });
+}
+
+function stopTransaction() {
+  transactionRunning = false;
+  chosenSwap = null;
+  updateMainMenuItems();
+  update0gSwapSubMenuItems();
+  screen.render();
+}
+
+function stopAllTransactions() {
+  if (transactionRunning) {
+    stopTransaction();
+    addLog("Tất cả giao dịch đã bị dừng.", "system");
+  } else {
+    addLog("Không có giao dịch nào đang chạy.", "system");
+  }
+}
+
+async function chooseGasFee() {
+  return new Promise((resolve, reject) => {
+    const container = blessed.box({
+      label: ' Chọn Phí Gas ',
+      top: 'center',
+      left: 'center',
+      width: '50%',
+      height: 8,
+      border: { type: 'line' },
+      style: { border: { fg: 'blue' } },
+      tags: true,
+    });
+
+    const gasFeeList = blessed.list({
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: 5,
+      items: ['Gas Bình Thường', 'Gas Thấp', 'Gas Phí x2'],
+      keys: true,
+      mouse: true,
+      style: { selected: { bg: 'blue', fg: 'white' } },
+    });
+    container.append(gasFeeList);
+
+    const cancelButton = blessed.button({
+      content: 'Hủy',
+      bottom: 0,
+      left: 'center',
+      shrink: true,
+      padding: { left: 1, right: 1 },
+      border: { type: 'line' },
+      style: { fg: 'white', bg: 'red', border: { fg: 'white' }, hover: { bg: 'blue' } },
+      mouse: true,
+      keys: true,
+    });
+    cancelButton.on('press', () => {
+      container.destroy();
+      autoSwapSubMenu.focus();
+      screen.render();
+      reject("Hủy chọn phí gas");
+    });
+    container.append(cancelButton);
+
+    screen.append(container);
+    gasFeeList.focus();
+    screen.render();
+
+    gasFeeList.on('select', async (item, index) => {
+      container.destroy();
+      try {
+        const feeData = await provider.getFeeData();
+        const gasPriceBN = feeData.gasPrice;
+        let selected;
+        if (index === 0) selected = gasPriceBN;
+        else if (index === 1) selected = gasPriceBN * 80n / 100n;
+        else if (index === 2) selected = gasPriceBN * 2n;
+        autoSwapSubMenu.focus();
+        screen.render();
+        resolve(selected);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
 
 function startTransactionProcess(pair, totalSwaps) {
   chooseGasFee().then(gasPrice => {
@@ -381,8 +597,112 @@ function startTransactionProcess(pair, totalSwaps) {
   });
 }
 
-// ... Phần còn lại của code (UI setup, event listeners) giữ nguyên
+mainMenu.on("select", (item) => {
+  const selected = item.getText();
+  if (selected === "Hoán Đổi 0g") {
+    mainMenu.hide();
+    autoSwapSubMenu.show();
+    autoSwapSubMenu.focus();
+    screen.render();
+  } else if (selected === "Hàng Đợi Giao Dịch") {
+    showTransactionQueueMenu();
+  } else if (selected === "Dừng Tất Cả Giao Dịch") {
+    stopAllTransactions();
+  } else if (selected === "Xóa Nhật Ký Giao Dịch") {
+    clearTransactionLogs();
+  } else if (selected === "Làm Mới") {
+    updateWalletData();
+  } else if (selected === "Thoát") {
+    process.exit(0);
+  }
+});
 
+autoSwapSubMenu.on("select", (item) => {
+  const selected = item.getText();
+  if (transactionRunning && !["Dừng Giao Dịch", "Xóa Nhật Ký Giao Dịch", "Quay Lại Menu Chính", "Thoát"].includes(selected)) {
+    addLog("Đang có giao dịch chạy. Vui lòng dừng trước.", "system");
+    return;
+  }
+  if (selected.startsWith("Tự Động Hoán Đổi USDT & ETH")) {
+    promptBox.setLabel("{bright-blue-fg}Số Lượng Hoán Đổi (USDT & ETH){/bright-blue-fg}");
+    promptBox.setFront();
+    promptBox.readInput("Nhập số lượng hoán đổi:", "", (err, value) => {
+      promptBox.hide();
+      screen.render();
+      if (err || !value) return addLog("Hủy nhập số lượng hoán đổi.", "system");
+      const totalSwaps = parseInt(value);
+      if (isNaN(totalSwaps) || totalSwaps <= 0) return addLog("Số lượng hoán đổi không hợp lệ.", "error");
+      startTransactionProcess("USDT & ETH", totalSwaps);
+    });
+  } else if (selected.startsWith("Tự Động Hoán Đổi USDT & BTC")) {
+    promptBox.setLabel("{bright-blue-fg}Số Lượng Hoán Đổi (USDT & BTC){/bright-blue-fg}");
+    promptBox.setFront();
+    promptBox.readInput("Nhập số lượng hoán đổi:", "", (err, value) => {
+      promptBox.hide();
+      screen.render();
+      if (err || !value) return addLog("Hủy nhập số lượng hoán đổi.", "system");
+      const totalSwaps = parseInt(value);
+      if (isNaN(totalSwaps) || totalSwaps <= 0) return addLog("Số lượng hoán đổi không hợp lệ.", "error");
+      startTransactionProcess("USDT & BTC", totalSwaps);
+    });
+  } else if (selected.startsWith("Tự Động Hoán Đổi BTC & ETH")) {
+    promptBox.setLabel("{bright-blue-fg}Số Lượng Hoán Đổi (BTC & ETH){/bright-blue-fg}");
+    promptBox.setFront();
+    promptBox.readInput("Nhập số lượng hoán đổi:", "", (err, value) => {
+      promptBox.hide();
+      screen.render();
+      if (err || !value) return addLog("Hủy nhập số lượng hoán đổi.", "system");
+      const totalSwaps = parseInt(value);
+      if (isNaN(totalSwaps) || totalSwaps <= 0) return addLog("Số lượng hoán đổi không hợp lệ.", "error");
+      startTransactionProcess("BTC & ETH", totalSwaps);
+    });
+  } else if (selected === "Dừng Giao Dịch") {
+    stopTransaction();
+  } else if (selected === "Xóa Nhật Ký Giao Dịch") {
+    clearTransactionLogs();
+  } else if (selected === "Quay Lại Menu Chính") {
+    autoSwapSubMenu.hide();
+    mainMenu.show();
+    mainMenu.focus();
+    screen.render();
+  } else if (selected === "Thoát") {
+    process.exit(0);
+  }
+});
+
+function adjustLayout() {
+  const screenWidth = screen.width;
+  const screenHeight = screen.height;
+  const headerHeight = Math.max(8, Math.floor(screenHeight * 0.15));
+  headerBox.top = 0;
+  headerBox.width = "100%";
+  headerBox.height = headerHeight;
+  descriptionBox.top = "25%";
+  descriptionBox.height = Math.floor(screenHeight * 0.05);
+  logsBox.top = headerHeight + descriptionBox.height;
+  logsBox.left = 0;
+  logsBox.width = Math.floor(screenWidth * 0.6);
+  logsBox.height = Math.floor(screenHeight * 0.5);
+  gasPriceBox.top = logsBox.top + logsBox.height;
+  gasPriceBox.left = logsBox.left;
+  gasPriceBox.width = logsBox.width;
+  gasPriceBox.height = Math.floor(screenHeight * 0.22);
+  walletBox.top = headerHeight + descriptionBox.height;
+  walletBox.left = Math.floor(screenWidth * 0.6);
+  walletBox.width = Math.floor(screenWidth * 0.4);
+  walletBox.height = Math.floor(screenHeight * 0.35);
+  mainMenu.top = walletBox.top + walletBox.height;
+  mainMenu.left = Math.floor(screenWidth * 0.6);
+  mainMenu.width = Math.floor(screenWidth * 0.4);
+  mainMenu.height = screenHeight - (headerHeight + descriptionBox.height + walletBox.height);
+  autoSwapSubMenu.top = mainMenu.top;
+  autoSwapSubMenu.left = mainMenu.left;
+  autoSwapSubMenu.width = mainMenu.width;
+  autoSwapSubMenu.height = mainMenu.height;
+  screen.render();
+}
+
+// Gắn các thành phần UI vào screen
 screen.append(headerBox);
 screen.append(descriptionBox);
 screen.append(logsBox);
@@ -392,10 +712,10 @@ screen.append(mainMenu);
 screen.append(autoSwapSubMenu);
 screen.append(queueMenu);
 
-adjustLayout();
 screen.on("resize", adjustLayout);
 screen.key(["escape", "q", "C-c"], () => process.exit(0));
 
+adjustLayout();
 mainMenu.focus();
 updateWalletData();
 updateMainMenuItems();

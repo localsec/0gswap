@@ -90,6 +90,8 @@ let transactionQueueList = [];
 let transactionIdCounter = 0;
 let nextNonces = WALLETS.map(() => null);
 let selectedGasPrice = null;
+let autoSwap24hRunning = false;
+let autoSwap24hInterval = null;
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -103,7 +105,7 @@ async function interruptibleDelay(totalMs) {
   const interval = 200;
   let elapsed = 0;
   while (elapsed < totalMs) {
-    if (!transactionRunning) break;
+    if (!transactionRunning && !autoSwap24hRunning) break;
     await delay(interval);
     elapsed += interval;
   }
@@ -238,7 +240,7 @@ updateGasPriceBox();
 
 function updateMainMenuItems() {
   const baseItems = ["Swap 0g", "Hàng Đợi Giao Dịch", "Xóa Nhật Ký Giao Dịch", "Làm Mới", "Thoát"];
-  if (transactionRunning) baseItems.splice(1, 0, "Dừng Tất Cả Giao Dịch");
+  if (transactionRunning || autoSwap24hRunning) baseItems.splice(1, 0, "Dừng Tất Cả Giao Dịch");
   mainMenu.setItems(baseItems);
   screen.render();
 }
@@ -260,11 +262,12 @@ function update0gSwapSubMenuItems() {
     "Tự Động Swap USDT & BTC",
     "Tự Động Swap BTC & ETH",
     "Tự Động Swap Tất Cả Cặp",
+    "Tự Động Swap 24h",
     "Xóa Nhật Ký Giao Dịch",
     "Quay Lại Menu Chính",
     "Thoát"
   ];
-  if (transactionRunning) items.unshift("Dừng Giao Dịch");
+  if (transactionRunning || autoSwap24hRunning) items.unshift("Dừng Giao Dịch");
   autoSwapSubMenu.setItems(items);
   screen.render();
 }
@@ -474,7 +477,7 @@ async function swapAuto(walletIndex, direction, amountIn) {
 async function autoSwapUsdtEth(walletIndex, totalSwaps) {
   try {
     for (let i = 1; i <= totalSwaps; i++) {
-      if (!transactionRunning) return;
+      if (!transactionRunning && !autoSwap24hRunning) return;
       if (i % 2 === 1) {
         try {
           const randomUsdt = (Math.random() * (300 - 100) + 100).toFixed(2);
@@ -515,7 +518,7 @@ async function autoSwapUsdtEth(walletIndex, totalSwaps) {
         const delaySeconds = Math.floor(Math.random() * (60 - 30 + 1)) + 30;
         addLog(`0GSwap: Đợi ${delaySeconds} giây trước swap tiếp theo... (Ví ${WALLETS[walletIndex].index})`, "0g");
         await interruptibleDelay(delaySeconds * 1000);
-        if (!transactionRunning) {
+        if (!transactionRunning && !autoSwap24hRunning) {
           addLog(`0GSwap: Tự động swap bị dừng trong thời gian chờ (Ví ${WALLETS[walletIndex].index})`, "0g");
           break;
         }
@@ -530,7 +533,7 @@ async function autoSwapUsdtEth(walletIndex, totalSwaps) {
 async function autoSwapUsdtBtc(walletIndex, totalSwaps) {
   try {
     for (let i = 1; i <= totalSwaps; i++) {
-      if (!transactionRunning) return;
+      if (!transactionRunning && !autoSwap24hRunning) return;
       if (i % 2 === 1) {
         try {
           const randomUsdt = (Math.random() * (300 - 100) + 100).toFixed(2);
@@ -571,7 +574,7 @@ async function autoSwapUsdtBtc(walletIndex, totalSwaps) {
         const delaySeconds = Math.floor(Math.random() * (60 - 30 + 1)) + 30;
         addLog(`0GSwap: Đợi ${delaySeconds} giây trước swap tiếp theo... (Ví ${WALLETS[walletIndex].index})`, "0g");
         await interruptibleDelay(delaySeconds * 1000);
-        if (!transactionRunning) {
+        if (!transactionRunning && !autoSwap24hRunning) {
           addLog(`0GSwap: Tự động swap bị dừng trong thời gian chờ (Ví ${WALLETS[walletIndex].index})`, "0g");
           break;
         }
@@ -586,7 +589,7 @@ async function autoSwapUsdtBtc(walletIndex, totalSwaps) {
 async function autoSwapBtcEth(walletIndex, totalSwaps) {
   try {
     for (let i = 1; i <= totalSwaps; i++) {
-      if (!transactionRunning) return;
+      if (!transactionRunning && !autoSwap24hRunning) return;
       if (i % 2 === 1) {
         try {
           const randomBtc = (Math.random() * (0.05 - 0.01) + 0.01).toFixed(6);
@@ -627,7 +630,7 @@ async function autoSwapBtcEth(walletIndex, totalSwaps) {
         const delaySeconds = Math.floor(Math.random() * (60 - 30 + 1)) + 30;
         addLog(`0GSwap: Đợi ${delaySeconds} giây trước swap tiếp theo... (Ví ${WALLETS[walletIndex].index})`, "0g");
         await interruptibleDelay(delaySeconds * 1000);
-        if (!transactionRunning) {
+        if (!transactionRunning && !autoSwap24hRunning) {
           addLog(`0GSwap: Tự động swap bị dừng trong thời gian chờ (Ví ${WALLETS[walletIndex].index})`, "0g");
           break;
         }
@@ -643,17 +646,17 @@ async function autoSwapAllPairs(totalSwaps) {
   try {
     for (const walletObj of WALLETS) {
       const walletIndex = walletObj.index - 1;
-      if (!transactionRunning) return;
+      if (!transactionRunning && !autoSwap24hRunning) return;
       addLog(`0GSwap: Bắt đầu swap tất cả cặp cho Ví ${walletObj.index}`, "0g");
 
       await autoSwapUsdtEth(walletIndex, totalSwaps);
-      if (!transactionRunning) return;
+      if (!transactionRunning && !autoSwap24hRunning) return;
 
       await autoSwapUsdtBtc(walletIndex, totalSwaps);
-      if (!transactionRunning) return;
+      if (!transactionRunning && !autoSwap24hRunning) return;
 
       await autoSwapBtcEth(walletIndex, totalSwaps);
-      if (!transactionRunning) return;
+      if (!transactionRunning && !autoSwap24hRunning) return;
 
       addLog(`0GSwap: Hoàn thành tất cả cặp swap cho Ví ${walletObj.index}`, "0g");
     }
@@ -661,7 +664,7 @@ async function autoSwapAllPairs(totalSwaps) {
   } catch (error) {
     addLog(`0GSwap: Lỗi khi swap tất cả cặp: ${error.message}`, "error");
   } finally {
-    stopTransaction();
+    if (!autoSwap24hRunning) stopTransaction();
   }
 }
 
@@ -743,6 +746,9 @@ function showTransactionQueueMenu() {
 
 function stopTransaction() {
   transactionRunning = false;
+  autoSwap24hRunning = false;
+  if (autoSwap24hInterval) clearInterval(autoSwap24hInterval);
+  autoSwap24hInterval = null;
   chosenSwap = null;
   updateMainMenuItems();
   update0gSwapSubMenuItems();
@@ -750,7 +756,7 @@ function stopTransaction() {
 }
 
 function stopAllTransactions() {
-  if (transactionRunning) {
+  if (transactionRunning || autoSwap24hRunning) {
     stopTransaction();
     addLog("Nhận lệnh Dừng Tất Cả Giao Dịch. Tất cả giao dịch đã bị dừng.", "system");
   } else {
@@ -791,6 +797,36 @@ async function startTransactionProcess(pair, totalSwaps) {
     }
   }).catch(err => {
     addLog("Hủy chọn phí gas: " + err, "system");
+  });
+}
+
+async function startAutoSwap24h(totalSwaps) {
+  await chooseGasFee().then(async gasPrice => {
+    selectedGasPrice = gasPrice;
+    addLog(`Phí gas được chọn: ${ethers.formatUnits(selectedGasPrice, "gwei")} Gwei`, "system");
+    autoSwap24hRunning = true;
+    updateMainMenuItems();
+    update0gSwapSubMenuItems();
+    addLog(`Bắt đầu tự động swap tất cả cặp mỗi 24h với ${totalSwaps} lần swap mỗi lần...`, "0g");
+
+    const runSwap = async () => {
+      if (!autoSwap24hRunning) return;
+      addLog("Tự động swap 24h: Bắt đầu chu kỳ swap mới.", "0g");
+      await autoSwapAllPairs(totalSwaps);
+      addLog("Tự động swap 24h: Hoàn thành chu kỳ swap, đợi 24h tiếp theo.", "0g");
+    };
+
+    // Chạy lần đầu ngay lập tức
+    await runSwap();
+
+    // Lập lịch chạy mỗi 24h
+    autoSwap24hInterval = setInterval(async () => {
+      await runSwap();
+    }, 24 * 60 * 60 * 1000); // 24 giờ
+
+  }).catch(err => {
+    addLog("Hủy chọn phí gas cho swap 24h: " + err, "system");
+    stopTransaction();
   });
 }
 
@@ -889,7 +925,7 @@ mainMenu.on("select", (item) => {
 
 autoSwapSubMenu.on("select", (item) => {
   const selected = item.getText();
-  if (transactionRunning && !["Dừng Giao Dịch", "Xóa Nhật Ký Giao Dịch", "Quay Lại Menu Chính", "Thoát"].includes(selected)) {
+  if ((transactionRunning || autoSwap24hRunning) && !["Dừng Giao Dịch", "Xóa Nhật Ký Giao Dịch", "Quay Lại Menu Chính", "Thoát"].includes(selected)) {
     addLog("Đang có giao dịch chạy. Vui lòng dừng giao dịch trước.", "system");
     return;
   }
@@ -960,6 +996,23 @@ autoSwapSubMenu.on("select", (item) => {
         return;
       }
       await startTransactionProcess("Tất Cả Cặp", totalSwaps);
+    });
+  } else if (selected.startsWith("Tự Động Swap 24h")) {
+    promptBox.setLabel("{bright-blue-fg}Số Lượng Swap (24h){/bright-blue-fg}");
+    promptBox.setFront();
+    promptBox.readInput("Nhập số lượng swap mỗi 24h:", "", async (err, value) => {
+      promptBox.hide();
+      screen.render();
+      if (err || !value) {
+        addLog("Hủy nhập số lượng swap 24h.", "system");
+        return;
+      }
+      const totalSwaps = parseInt(value);
+      if (isNaN(totalSwaps) || totalSwaps <= 0) {
+        addLog("Số lượng swap không hợp lệ. Nhập số > 0.", "error");
+        return;
+      }
+      await startAutoSwap24h(totalSwaps);
     });
   } else if (selected === "Dừng Giao Dịch") {
     stopTransaction();

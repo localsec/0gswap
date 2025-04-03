@@ -31,9 +31,6 @@ const ESTIMATED_GAS_USAGE = 150000;
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 
 // Khởi tạo wallets
-console.log("Raw PRIVATE_KEYS từ .env:", PRIVATE_KEYS_RAW);
-console.log("PRIVATE_KEYS sau khi xử lý:", PRIVATE_KEYS);
-
 const wallets = PRIVATE_KEYS.map((key, index) => {
   try {
     if (!key.match(/^0x[0-9a-fA-F]{64}$/)) {
@@ -47,6 +44,7 @@ const wallets = PRIVATE_KEYS.map((key, index) => {
     process.exit(1);
   }
 });
+console.log(`Tổng cộng ${wallets.length} ví đã được khởi tạo.`);
 
 // ABI definitions
 const CONTRACT_ABI = [

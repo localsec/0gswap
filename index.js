@@ -92,6 +92,7 @@ let nextNonces = WALLETS.map(() => null);
 let selectedGasPrice = null;
 let autoSwap24hRunning = false;
 let autoSwap24hInterval = null;
+let nextSwapTime = null;
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -148,7 +149,7 @@ function clearTransactionLogs() {
 
 const screen = blessed.screen({
   smartCSR: true,
-  title: "LocalSec",
+  title: "NT Exhaust",
   fullUnicode: true,
   mouse: true
 });
@@ -160,8 +161,8 @@ const headerBox = blessed.box({
   tags: true,
   style: { fg: "white" }
 });
-figlet.text("LocalSec", { font: "Speed", horizontalLayout: "default" }, (err, data) => {
-  if (err) headerBox.setContent("{center}{bold}LocalSec{/bold}{/center}");
+figlet.text("NT EXHAUST", { font: "Speed", horizontalLayout: "default" }, (err, data) => {
+  if (err) headerBox.setContent("{center}{bold}NT EXHAUST{/bold}{/center}");
   else headerBox.setContent(`{center}{bold}{green-fg}${data}{/green-fg}{/bold}{/center}`);
   screen.render();
 });
@@ -207,6 +208,15 @@ const gasPriceBox = blessed.box({
   content: "Đang tải giá gas..."
 });
 
+const countdownBox = blessed.box({
+  label: " Đếm Ngược Swap 24h ",
+  border: { type: "line" },
+  tags: true,
+  style: { border: { fg: "green" }, fg: "white", bg: "default" },
+  content: "Chưa kích hoạt tự động swap 24h",
+  hidden: true
+});
+
 async function updateGasPriceBox() {
   try {
     const provider = WALLETS[0].wallet.provider;
@@ -237,6 +247,27 @@ async function updateGasPriceBox() {
 }
 setInterval(updateGasPriceBox, 10000);
 updateGasPriceBox();
+
+function updateCountdownBox() {
+  if (!autoSwap24hRunning || !nextSwapTime) {
+    countdownBox.setContent("Chưa kích hoạt tự động swap 24h");
+    countdownBox.hide();
+    return;
+  }
+  countdownBox.show();
+  const now = Date.now();
+  const timeLeft = nextSwapTime - now;
+  if (timeLeft <= 0) {
+    countdownBox.setContent("Đang thực hiện swap...");
+  } else {
+    const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+    countdownBox.setContent(`Swap tiếp theo sau: ${hours}h ${minutes}m ${seconds}s`);
+  }
+  screen.render();
+}
+setInterval(updateCountdownBox, 1000);
 
 function updateMainMenuItems() {
   const baseItems = ["Swap 0g", "Hàng Đợi Giao Dịch", "Xóa Nhật Ký Giao Dịch", "Làm Mới", "Thoát"];
@@ -749,9 +780,11 @@ function stopTransaction() {
   autoSwap24hRunning = false;
   if (autoSwap24hInterval) clearInterval(autoSwap24hInterval);
   autoSwap24hInterval = null;
+  nextSwapTime = null;
   chosenSwap = null;
   updateMainMenuItems();
   update0gSwapSubMenuItems();
+  updateCountdownBox();
   screen.render();
 }
 
@@ -813,11 +846,15 @@ async function startAutoSwap24h(totalSwaps) {
       if (!autoSwap24hRunning) return;
       addLog("Tự động swap 24h: Bắt đầu chu kỳ swap mới.", "0g");
       await autoSwapAllPairs(totalSwaps);
-      addLog("Tự động swap 24h: Hoàn thành chu kỳ swap, đợi 24h tiếp theo.", "0g");
+      if (autoSwap24hRunning) {
+        nextSwapTime = Date.now() + 24 * 60 * 60 * 1000; // Cập nhật thời điểm swap tiếp theo
+        addLog("Tự động swap 24h: Hoàn thành chu kỳ swap, đợi 24h tiếp theo.", "0g");
+      }
     };
 
     // Chạy lần đầu ngay lập tức
     await runSwap();
+    nextSwapTime = Date.now() + 24 * 60 * 60 * 1000; // Thời điểm swap tiếp theo sau 24h
 
     // Lập lịch chạy mỗi 24h
     autoSwap24hInterval = setInterval(async () => {
@@ -1034,6 +1071,7 @@ screen.append(descriptionBox);
 screen.append(logsBox);
 screen.append(gasPriceBox);
 screen.append(walletBox);
+screen.append(countdownBox);
 screen.append(mainMenu);
 screen.append(autoSwapSubMenu);
 screen.append(queueMenu);
@@ -1054,7 +1092,11 @@ function adjustLayout() {
   gasPriceBox.top = logsBox.top + logsBox.height;
   gasPriceBox.left = logsBox.left;
   gasPriceBox.width = logsBox.width;
-  gasPriceBox.height = Math.floor(screenHeight * 0.22);
+  gasPriceBox.height = Math.floor(screenHeight * 0.15);
+  countdownBox.top = gasPriceBox.top + gasPriceBox.height;
+  countdownBox.left = logsBox.left;
+  countdownBox.width = logsBox.width;
+  countdownBox.height = Math.floor(screenHeight * 0.07);
   walletBox.top = headerHeight + descriptionBox.height;
   walletBox.left = Math.floor(screenWidth * 0.6);
   walletBox.width = Math.floor(screenWidth * 0.4);

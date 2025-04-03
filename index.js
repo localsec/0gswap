@@ -313,7 +313,7 @@ async function autoSwapAllPairs(totalSwaps) {
       const walletIndex = (i - 1) % wallets.length;
 
       for (const pair of pairs) {
-        const amount = ethers.parseUnits("0.001", 18); // 0.001 token
+        const amount = pair.from === "USDT" ? ethers.parseUnits("1", 18) : ethers.parseUnits("0.001", 18); // 1 USDT khi từ USDT, 0.001 cho các trường hợp khác
         const tokenContract = new ethers.Contract(pair.tokenIn, pair.abi, provider);
         const currentBalance = await tokenContract.balanceOf(wallets[walletIndex].address);
 
@@ -324,7 +324,7 @@ async function autoSwapAllPairs(totalSwaps) {
             await approveToken(walletIndex, pair.tokenIn, pair.abi, amount);
             await swapAuto(walletIndex, `${pair.from.toLowerCase()}To${pair.to.toLowerCase()}`, amount);
             await updateWalletData();
-          }, `Ví ${walletIndex + 1}: ${pair.from} ➯ ${pair.to}, 0.001 ${pair.from}`);
+          }, `Ví ${walletIndex + 1}: ${pair.from} ➯ ${pair.to}, ${pair.from === "USDT" ? "1" : "0.001"} ${pair.from}`);
         }
 
         if (!transactionRunning) return;

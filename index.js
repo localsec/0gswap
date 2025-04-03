@@ -260,10 +260,9 @@ function updateCountdownBox() {
   if (timeLeft <= 0) {
     countdownBox.setContent("Đang thực hiện swap...");
   } else {
-    const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
-    countdownBox.setContent(`Swap tiếp theo sau: ${hours}h ${minutes}m ${seconds}s`);
+    const nextSwapDate = new Date(nextSwapTime);
+    const timeString = nextSwapDate.toLocaleString(); // Hiển thị thời gian theo giờ địa phương
+    countdownBox.setContent(`Swap tiếp theo vào: ${timeString}`);
   }
   screen.render();
 }
@@ -899,7 +898,7 @@ async function chooseGasFee() {
       left: 'center',
       shrink: true,
       padding: { left: 1, right: 1 },
-      border: { type: 'line' },
+      border: { type: "line" },
       style: {
         fg: 'white',
         bg: 'red',

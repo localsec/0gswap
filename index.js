@@ -4,7 +4,21 @@ import figlet from "figlet";
 import { ethers } from "ethers";
 
 const RPC_URL = process.env.RPC_URL || "https://your-default-rpc-url";
-const PRIVATE_KEYS = (process.env.PRIVATE_KEYS || "").split(",").map(key => key.trim()).filter(key => key);
+const PRIVATE_KEYS_RAW = process.env.PRIVATE_KEYS || "";
+if (!PRIVATE_KEYS_RAW) {
+  console.error("Lỗi: Không tìm thấy PRIVATE_KEYS trong .env");
+  process.exit(1);
+}
+const PRIVATE_KEYS = PRIVATE_KEYS_RAW.split(",").map(key => {
+  key = key.trim();
+  // Nếu key không có 0x và dài 64 ký tự hex, thêm 0x
+  if (!key.startsWith("0x") && key.match(/^[0-9a-fA-F]{64}$/)) {
+    return "0x" + key;
+  }
+  // Nếu đã có 0x, giữ nguyên
+  return key;
+}).filter(key => key);
+
 const ROUTER_ADDRESS = process.env.ROUTER_ADDRESS;
 const USDT_ADDRESS = process.env.USDT_ADDRESS;
 const ETH_ADDRESS = process.env.ETH_ADDRESS;
@@ -17,24 +31,23 @@ const ESTIMATED_GAS_USAGE = 150000;
 
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 
-// Kiểm tra và tạo danh sách wallets
-if (!PRIVATE_KEYS.length) {
-  console.error("Lỗi: Không tìm thấy PRIVATE_KEYS trong .env");
-  process.exit(1);
-}
+console.log("Raw PRIVATE_KEYS từ .env:", PRIVATE_KEYS_RAW);
+console.log("PRIVATE_KEYS sau khi xử lý:", PRIVATE_KEYS);
 
 const wallets = PRIVATE_KEYS.map((key, index) => {
   try {
+    // Kiểm tra định dạng: phải là 0x + 64 ký tự hex sau khi xử lý
     if (!key.match(/^0x[0-9a-fA-F]{64}$/)) {
-      throw new Error(`Private key ${index + 1} không đúng định dạng hex 64 ký tự`);
+      throw new Error(`Private key ${index + 1} không đúng định dạng (64 ký tự hex)`);
     }
-    return new ethers.Wallet(key, provider);
+    const wallet = new ethers.Wallet(key, provider);
+    console.log(`Ví ${index + 1} được tạo: ${wallet.address}`);
+    return wallet;
   } catch (error) {
     console.error(`Lỗi với private key ${index + 1}: ${error.message}`);
     process.exit(1);
   }
 });
-console.log("Các ví đã được tạo:", wallets.map(w => w.address));
 
 // ABI definitions (giữ nguyên)
 const CONTRACT_ABI = [/* ... */];
@@ -47,7 +60,7 @@ let chosenSwap = null;
 let transactionQueue = Promise.resolve();
 let transactionQueueList = [];
 let transactionIdCounter = 0;
-let nextNonces = wallets.map(() => null); // Mảng nonce cho từng wallet
+let nextNonces = wallets.map(() => null);
 let selectedGasPrice = null;
 
 function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
@@ -234,7 +247,6 @@ async function autoSwapUsdtEth(totalSwaps) {
   }
 }
 
-// Tương tự cho autoSwapUsdtBtc và autoSwapBtcEth
 async function autoSwapUsdtBtc(totalSwaps) {
   try {
     for (let i = 1; i <= totalSwaps; i++) {

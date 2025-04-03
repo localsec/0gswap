@@ -292,21 +292,17 @@ async function autoSwapAllPairs(totalSwaps) {
       { from: "ETH", to: "BTC", tokenIn: ETH_ADDRESS, tokenOut: BTC_ADDRESS, abi: ETH_ABI },
     ];
 
-    let walletCounter = 0; // Biến đếm để luân phiên ví
-
-    for (let i = 0; i < totalSwaps; i++) {
+    for (let i = 1; i <= totalSwaps; i++) {
       if (!transactionRunning) return;
+      const walletIndex = (i - 1) % wallets.length;
 
       for (const pair of pairs) {
-        const walletIndex = walletCounter % wallets.length; // Luân phiên ví cho mỗi cặp
-        addLog(`0G: Chuẩn bị hoán đổi với ví ${walletIndex + 1}`, "system");
-
-        const amount = pair.from === "USDT" ? ethers.parseUnits("1", 18) : ethers.parseUnits("0.001", 18);
+        const amount = pair.from === "USDT" ? ethers.parseUnits("1", 18) : ethers.parseUnits("0.001", 18); // 1 USDT khi từ USDT, 0.001 cho các trường hợp khác
         const tokenContract = new ethers.Contract(pair.tokenIn, pair.abi, provider);
         const currentBalance = await tokenContract.balanceOf(wallets[walletIndex].address);
 
         if (currentBalance < amount) {
-          addLog(`0G: Ví ${walletIndex + 1} số dư ${pair.from} không đủ (${ethers.formatUnits(currentBalance, 18)} < ${ethers.formatUnits(amount, 18)})`, "error");
+          addLog(`0G: Ví ${walletIndex + 1} số dư ${pair.from} không đủ`, "error");
         } else {
           await addTransactionToQueue(async () => {
             await approveToken(walletIndex, pair.tokenIn, pair.abi, amount);
@@ -315,10 +311,8 @@ async function autoSwapAllPairs(totalSwaps) {
           }, `Ví ${walletIndex + 1}: ${pair.from} ➯ ${pair.to}, ${pair.from === "USDT" ? "1" : "0.001"} ${pair.from}`);
         }
 
-        walletCounter++; // Tăng biến đếm để chuyển sang ví tiếp theo
-
         if (!transactionRunning) return;
-        const delaySeconds = Math.floor(Math.random() * (15 - 3 + 1)) + 3;
+        const delaySeconds = Math.floor(Math.random() * (15 - 3 + 1)) + 3; // Giảm thời gian chờ từ 3 đến 15 giây
         addLog(`0G: Đợi ${delaySeconds} giây trước khi hoán đổi cặp tiếp theo...`, "0g");
         await interruptibleDelay(delaySeconds * 1000);
       }
@@ -433,7 +427,7 @@ async function chooseGasFee() {
       left: 'center',
       shrink: true,
       padding: { left: 1, right: 1 },
-      border: { type: "line" },
+      border: { type: 'line' },
       style: { fg: 'white', bg: 'red', border: { fg: 'white' }, hover: { bg: 'blue' } },
       mouse: true,
       keys: true,
@@ -506,4 +500,82 @@ mainMenu.on("select", (item) => {
 autoSwapSubMenu.on("select", (item) => {
   const selected = item.getText();
   if (transactionRunning && !["Dừng Giao Dịch", "Xóa Nhật Ký Giao Dịch", "Quay Lại Menu Chính", "Thoát"].includes(selected)) {
-    addLog("Đang có giao dịch chạy. Vui lòng dừng...
+    addLog("Đang có giao dịch chạy. Vui lòng dừng trước.", "system");
+    return;
+  }
+  if (selected === "Bắt đầu Hoán Đổi Tất Cả Cặp") {
+    promptBox.setLabel("{bright-blue-fg}Số Lượng Hoán Đổi (Tất Cả Cặp){/bright-blue-fg}");
+    promptBox.setFront();
+    promptBox.readInput("Nhập số lượng hoán đổi:", "", (err, value) => {
+      promptBox.hide();
+      screen.render();
+      if (err || !value) return addLog("Hủy nhập số lượng hoán đổi.", "system");
+      const totalSwaps = parseInt(value);
+      if (isNaN(totalSwaps) || totalSwaps <= 0) return addLog("Số lượng hoán đổi không hợp lệ.", "error");
+      startTransactionProcess(totalSwaps);
+    });
+  } else if (selected === "Dừng Giao Dịch") {
+    stopTransaction();
+  } else if (selected === "Xóa Nhật Ký Giao Dịch") {
+    clearTransactionLogs();
+  } else if (selected === "Quay Lại Menu Chính") {
+    autoSwapSubMenu.hide();
+    mainMenu.show();
+    mainMenu.focus();
+    screen.render();
+  } else if (selected === "Thoát") {
+    process.exit(0);
+  }
+});
+
+function adjustLayout() {
+  const screenWidth = screen.width;
+  const screenHeight = screen.height;
+  const headerHeight = Math.max(8, Math.floor(screenHeight * 0.15));
+  headerBox.top = 0;
+  headerBox.width = "100%";
+  headerBox.height = headerHeight;
+  descriptionBox.top = "25%";
+  descriptionBox.height = Math.floor(screenHeight * 0.05);
+  logsBox.top = headerHeight + descriptionBox.height;
+  logsBox.left = 0;
+  logsBox.width = Math.floor(screenWidth * 0.6);
+  logsBox.height = Math.floor(screenHeight * 0.5);
+  gasPriceBox.top = logsBox.top + logsBox.height;
+  gasPriceBox.left = logsBox.left;
+  gasPriceBox.width = logsBox.width;
+  gasPriceBox.height = Math.floor(screenHeight * 0.22);
+  walletBox.top = headerHeight + descriptionBox.height;
+  walletBox.left = Math.floor(screenWidth * 0.6);
+  walletBox.width = Math.floor(screenWidth * 0.4);
+  walletBox.height = Math.floor(screenHeight * 0.35);
+  mainMenu.top = walletBox.top + walletBox.height;
+  mainMenu.left = Math.floor(screenWidth * 0.6);
+  mainMenu.width = Math.floor(screenWidth * 0.4);
+  mainMenu.height = screenHeight - (headerHeight + descriptionBox.height + walletBox.height);
+  autoSwapSubMenu.top = mainMenu.top;
+  autoSwapSubMenu.left = mainMenu.left;
+  autoSwapSubMenu.width = mainMenu.width;
+  autoSwapSubMenu.height = mainMenu.height;
+  screen.render();
+}
+
+// Gắn các thành phần UI vào screen
+screen.append(headerBox);
+screen.append(descriptionBox);
+screen.append(logsBox);
+screen.append(gasPriceBox);
+screen.append(walletBox);
+screen.append(mainMenu);
+screen.append(autoSwapSubMenu);
+screen.append(queueMenu);
+
+screen.on("resize", adjustLayout);
+screen.key(["escape", "q", "C-c"], () => process.exit(0));
+
+adjustLayout();
+mainMenu.focus();
+updateWalletData();
+updateMainMenuItems();
+update0gSwapSubMenuItems();
+screen.render();

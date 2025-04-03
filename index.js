@@ -305,8 +305,7 @@ async function autoSwapUsdtEth(totalSwaps) {
       if (!transactionRunning) return;
       const walletIndex = (i - 1) % wallets.length;
       if (i % 2 === 1) {
-        const randomUsdt = (Math.random() * (300 - 100) + 100).toFixed(2);
-        const usdtAmount = ethers.parseUnits(randomUsdt, 18);
+        const usdtAmount = ethers.parseUnits("0.001", 18); // 0.001 USDT
         const usdtContract = new ethers.Contract(USDT_ADDRESS, USDT_ABI, provider);
         const currentUsdtBalance = await usdtContract.balanceOf(wallets[walletIndex].address);
         if (currentUsdtBalance < usdtAmount) {
@@ -316,11 +315,10 @@ async function autoSwapUsdtEth(totalSwaps) {
             await approveToken(walletIndex, USDT_ADDRESS, USDT_ABI, usdtAmount);
             await swapAuto(walletIndex, "usdtToEth", usdtAmount);
             await updateWalletData();
-          }, `Ví ${walletIndex + 1}: USDT ➯ ETH, ${randomUsdt} USDT`);
+          }, `Ví ${walletIndex + 1}: USDT ➯ ETH, 0.001 USDT`);
         }
       } else {
-        const randomEth = (Math.random() * (0.3 - 0.1) + 0.1).toFixed(6);
-        const ethAmount = ethers.parseUnits(randomEth, 18);
+        const ethAmount = ethers.parseUnits("0.001", 18); // 0.001 ETH
         const ethContract = new ethers.Contract(ETH_ADDRESS, ETH_ABI, provider);
         const currentEthBalance = await ethContract.balanceOf(wallets[walletIndex].address);
         if (currentEthBalance < ethAmount) {
@@ -330,7 +328,7 @@ async function autoSwapUsdtEth(totalSwaps) {
             await approveToken(walletIndex, ETH_ADDRESS, ETH_ABI, ethAmount);
             await swapAuto(walletIndex, "ethToUsdt", ethAmount);
             await updateWalletData();
-          }, `Ví ${walletIndex + 1}: ETH ➯ USDT, ${randomEth} ETH`);
+          }, `Ví ${walletIndex + 1}: ETH ➯ USDT, 0.001 ETH`);
         }
       }
       if (i < totalSwaps) {
@@ -353,8 +351,7 @@ async function autoSwapUsdtBtc(totalSwaps) {
       if (!transactionRunning) return;
       const walletIndex = (i - 1) % wallets.length;
       if (i % 2 === 1) {
-        const randomUsdt = (Math.random() * (300 - 100) + 100).toFixed(2);
-        const usdtAmount = ethers.parseUnits(randomUsdt, 18);
+        const usdtAmount = ethers.parseUnits("0.001", 18); // 0.001 USDT
         const usdtContract = new ethers.Contract(USDT_ADDRESS, USDT_ABI, provider);
         const currentUsdtBalance = await usdtContract.balanceOf(wallets[walletIndex].address);
         if (currentUsdtBalance < usdtAmount) {
@@ -364,11 +361,10 @@ async function autoSwapUsdtBtc(totalSwaps) {
             await approveToken(walletIndex, USDT_ADDRESS, USDT_ABI, usdtAmount);
             await swapAuto(walletIndex, "usdtToBtc", usdtAmount);
             await updateWalletData();
-          }, `Ví ${walletIndex + 1}: USDT ➯ BTC, ${randomUsdt} USDT`);
+          }, `Ví ${walletIndex + 1}: USDT ➯ BTC, 0.001 USDT`);
         }
       } else {
-        const randomBtc = (Math.random() * (0.05 - 0.01) + 0.01).toFixed(6);
-        const btcAmount = ethers.parseUnits(randomBtc, 18);
+        const btcAmount = ethers.parseUnits("0.001", 18); // 0.001 BTC
         const btcContract = new ethers.Contract(BTC_ADDRESS, BTC_ABI, provider);
         const currentBtcBalance = await btcContract.balanceOf(wallets[walletIndex].address);
         if (currentBtcBalance < btcAmount) {
@@ -378,7 +374,7 @@ async function autoSwapUsdtBtc(totalSwaps) {
             await approveToken(walletIndex, BTC_ADDRESS, BTC_ABI, btcAmount);
             await swapAuto(walletIndex, "btcToUsdt", btcAmount);
             await updateWalletData();
-          }, `Ví ${walletIndex + 1}: BTC ➯ USDT, ${randomBtc} BTC`);
+          }, `Ví ${walletIndex + 1}: BTC ➯ USDT, 0.001 BTC`);
         }
       }
       if (i < totalSwaps) {
@@ -401,8 +397,7 @@ async function autoSwapBtcEth(totalSwaps) {
       if (!transactionRunning) return;
       const walletIndex = (i - 1) % wallets.length;
       if (i % 2 === 1) {
-        const randomBtc = (Math.random() * (0.05 - 0.01) + 0.01).toFixed(6);
-        const btcAmount = ethers.parseUnits(randomBtc, 18);
+        const btcAmount = ethers.parseUnits("0.001", 18); // 0.001 BTC
         const btcContract = new ethers.Contract(BTC_ADDRESS, BTC_ABI, provider);
         const currentBtcBalance = await btcContract.balanceOf(wallets[walletIndex].address);
         if (currentBtcBalance < btcAmount) {
@@ -412,11 +407,10 @@ async function autoSwapBtcEth(totalSwaps) {
             await approveToken(walletIndex, BTC_ADDRESS, BTC_ABI, btcAmount);
             await swapAuto(walletIndex, "btcToEth", btcAmount);
             await updateWalletData();
-          }, `Ví ${walletIndex + 1}: BTC ➯ ETH, ${randomBtc} BTC`);
+          }, `Ví ${walletIndex + 1}: BTC ➯ ETH, 0.001 BTC`);
         }
       } else {
-        const randomEth = (Math.random() * (0.3 - 0.1) + 0.1).toFixed(6);
-        const ethAmount = ethers.parseUnits(randomEth, 18);
+        const ethAmount = ethers.parseUnits("0.001", 18); // 0.001 ETH
         const ethContract = new ethers.Contract(ETH_ADDRESS, ETH_ABI, provider);
         const currentEthBalance = await ethContract.balanceOf(wallets[walletIndex].address);
         if (currentEthBalance < ethAmount) {
@@ -426,7 +420,7 @@ async function autoSwapBtcEth(totalSwaps) {
             await approveToken(walletIndex, ETH_ADDRESS, ETH_ABI, ethAmount);
             await swapAuto(walletIndex, "ethToBtc", ethAmount);
             await updateWalletData();
-          }, `Ví ${walletIndex + 1}: ETH ➯ BTC, ${randomEth} ETH`);
+          }, `Ví ${walletIndex + 1}: ETH ➯ BTC, 0.001 ETH`);
         }
       }
       if (i < totalSwaps) {

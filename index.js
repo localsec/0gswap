@@ -311,7 +311,7 @@ async function autoSwapAllPairs(totalSwaps) {
     ];
 
     for (let i = 1; i <= totalSwaps; i++) {
-      if (!transaction RECRunning) return;
+      if (!transactionRunning) return;
       const walletIndex = (i - 1) % wallets.length;
 
       for (const pair of pairs) {
